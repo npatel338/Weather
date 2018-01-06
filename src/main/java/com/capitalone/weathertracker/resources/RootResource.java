@@ -7,6 +7,9 @@ import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.beans.factory.annotation.Autowired;
+
 /*
   TODO: Implement the endpoints in the ATs.
   The below stubs are provided as a starting point.
@@ -18,15 +21,16 @@ import javax.ws.rs.core.Response;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class RootResource {
+    
+    private WeatherTrackerService weatherTrackerService;
+    
     private static final Response NOT_IMPLEMENTED = Response.status(501).build();
 
     // dummy handler so you can tell if the server is running
     // e.g. `curl localhost:8000`
     @GET
     public Response get() {
-        return Response
-            .ok("Weather tracker is up and running!\n")
-            .build();
+        return weatherTrackerService.testingService();
     }
 
     // features/01-measurements/01-add-measurement.feature
@@ -40,7 +44,14 @@ public class RootResource {
             "precipitation": 0
         }
         */
+        Iterator<Entry<String, JsonNode>> iterator = measurement.getFields();
 
+        while (iterator.hasNext()) {
+            Entry<String, JsonNode> entity = iterator.next();
+            String key = entity.getKey();
+            JsonNode value = entity.getValue();
+        }
+           
         return NOT_IMPLEMENTED;
     }
 
