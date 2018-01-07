@@ -2,13 +2,15 @@ package com.capitalone.weathertracker.resources;
 
 import com.capitalone.weathertracker.annotations.PATCH;
 import com.fasterxml.jackson.databind.JsonNode;
+
+import java.text.ParseException;
 import java.util.List;
+import java.util.Map;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.capitalone.weathertracker.services.WeatherTrackerService;
 
 /*
   TODO: Implement the endpoints in the ATs.
@@ -16,25 +18,34 @@ import org.springframework.beans.factory.annotation.Autowired;
   You may refactor them however you like, so long as the resources are defined
   in the `com.capitalone.weathertracker.resources` package.
 */
-
 @Path("/")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class RootResource {
-    
-    private WeatherTrackerService weatherTrackerService;
-    
-    private static final Response NOT_IMPLEMENTED = Response.status(501).build();
+
+    public static final Response NOT_IMPLEMENTED = Response.status(501).build();
+    public static final Response CREATED = Response.status(201).build();
+    public static final Response CONFLICT = Response.status(409).build();
+    public static final Response SUCCESSFUL = Response.status(200).build();
+    public static final Response NOT_FOUND = Response.status(404).build();
+
+
+    private WeatherTrackerService trackerService = new WeatherTrackerService();
 
     // dummy handler so you can tell if the server is running
     // e.g. `curl localhost:8000`
     @GET
     public Response get() {
-        return weatherTrackerService.testingService();
+
+        // return Response
+        //     .ok("Weather tracker is up and running!\n")
+        //     .build();
+        return trackerService.testingService();
     }
 
     // features/01-measurements/01-add-measurement.feature
-    @POST @Path("/measurements")
+    @POST
+    @Path("/measurements")
     public Response createMeasurement(JsonNode measurement) {
         /* Example:
         measurement := {
@@ -44,21 +55,79 @@ public class RootResource {
             "precipitation": 0
         }
         */
-        Iterator<Entry<String, JsonNode>> iterator = measurement.getFields();
+        trackerService.saveData(measurement);
+        return Response
+                .ok("All data saved")
+                .build();
+    }
 
-        while (iterator.hasNext()) {
-            Entry<String, JsonNode> entity = iterator.next();
-            String key = entity.getKey();
-            JsonNode value = entity.getValue();
+    @POST
+    @Path("/testString")
+    public Response testString(JsonNode values) {
+        /* Example:
+        measurement := {
+            "timestamp": "2015-09-01T16:00:00.000Z",
+            "temperature": 27.1,
+            "dewPoint": 16.7,
+            "precipitation": 0
         }
-           
-        return NOT_IMPLEMENTED;
+        */
+        trackerService.saveValuesTest(values);
+        return Response
+                .ok("Working on JsonNode")
+                .build();
+    }
+
+    @GET
+    @Path("/testString/{key}")
+    public Response getTestString(@PathParam("key") String key) {
+        /* Example:
+        measurement := {
+            "timestamp": "2015-09-01T16:00:00.000Z",
+            "temperature": 27.1,
+            "dewPoint": 16.7,
+            "precipitation": 0
+        }
+        */
+
+        String sampleString = trackerService.retrieveTestData(key);
+
+        if (sampleString != null && !sampleString.isEmpty()) {
+            return Response
+                    .ok(sampleString.toString())
+                    .build();
+        } else {
+            return Response
+                    .ok("there is nothing in the string yet")
+                    .build();
+        }
+    }
+
+    @GET
+    @Path("/testString")
+    public Response getAllElements() {
+        /* Example:
+        measurement := {
+            "timestamp": "2015-09-01T16:00:00.000Z",
+            "temperature": 27.1,
+            "dewPoint": 16.7,
+            "precipitation": 0
+        }
+        */
+
+        Map<String, Object> temp = trackerService.retrieveTestDataAll();
+        return Response
+                .ok("All data retrieved")
+                .entity(temp)
+                .build();
     }
 
     // features/01-measurements/02-get-measurement.feature
-    @GET @Path("/measurements/{timestamp}")
+    @GET
+    @Path("/measurements/{timestamp}")
     public Response getMeasurement(@PathParam("timestamp") String timestamp) {
-        /* Example 1:
+
+         /* Example 1:
         timestamp := "2015-09-01T16:20:00.000Z"
 
         return {
@@ -87,12 +156,32 @@ public class RootResource {
             }
         ]
         */
+        List<Map<String, Object>> measurements = null;
+        try {
+            measurements = trackerService.retrieveDataTimeStampBased(timestamp);
+            if (measurements.size() == 1) {
+                return Response
+                        .ok("All data retrieved")
+                        .entity(measurements.get(0))
+                        .build();
+            }
+            return Response
+                    .ok("All data retrieved")
+                    .entity(measurements)
+                    .build();
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
 
-        return NOT_IMPLEMENTED;
+        return Response
+                .ok("Some sort of error")
+                .entity(measurements)
+                .build();
     }
 
     // features/01-measurements/03-update-measurement.feature
-    @PUT @Path("/measurements/{timestamp}")
+    @PUT
+    @Path("/measurements/{timestamp}")
     public Response replaceMeasurement(@PathParam("timestamp") String timestamp, JsonNode measurement) {
         /* Example:
         timestamp := "2015-09-01T16:20:00.000Z"
@@ -105,11 +194,15 @@ public class RootResource {
         }
         */
 
-        return NOT_IMPLEMENTED;
+        trackerService.updateMeasurement(timestamp, measurement);
+        return Response
+                .ok("Working on updating the measurement")
+                .build();
     }
 
     // features/01-measurements/03-update-measurement.feature
-    @PATCH @Path("/measurements/{timestamp}")
+    @PATCH
+    @Path("/measurements/{timestamp}")
     public Response updateMeasurement(@PathParam("timestamp") String timestamp, JsonNode measurement) {
         /* Example:
         timestamp := "2015-09-01T16:20:00.000Z"
@@ -120,21 +213,29 @@ public class RootResource {
         }
         */
 
-        return NOT_IMPLEMENTED;
+        return trackerService.patchMeasurement(timestamp, measurement);
     }
 
     // features/01-measurements/04-delete-measurement.feature
-    @DELETE @Path("/measurements/{timestamp}")
+    @DELETE
+    @Path("/measurements/{timestamp}")
     public Response deleteMeasurement(@PathParam("timestamp") String timestamp) {
         /* Example:
         timestamp := "2015-09-01T16:20:00.000Z"
         */
 
-        return NOT_IMPLEMENTED;
+        trackerService.deleteMeasurement(timestamp);
+        return Response
+                .ok("Working on deleting a measurement")
+                .build();
     }
 
-    @GET @Path("/stats")
-    public Response getStats(@QueryParam("metric") List<String> metrics, @QueryParam("stat") List<String> stats) {
+
+    //    public Response getStats(@QueryParam("metric") List<String> metrics, @QueryParam("stat") List<String> stats) {
+
+    @GET
+    @Path("/stats")
+    public Response getStats(@QueryParam("metric") List<String> metrics, @QueryParam("stat") List<String> stats, @QueryParam("fromDateTime") String fromDateTime, @QueryParam("toDateTime") String toDateTime) {
         /* Example:
         metrics := [
             "temperature",
@@ -169,7 +270,11 @@ public class RootResource {
             }
         ]
         */
-
-        return NOT_IMPLEMENTED;
+        List<Map<String, Object>> statsList = trackerService.getStat(metrics, stats, fromDateTime, toDateTime);
+        return Response
+                .ok("Success")
+                .entity(statsList)
+                .status(200)
+                .build();
     }
 }
