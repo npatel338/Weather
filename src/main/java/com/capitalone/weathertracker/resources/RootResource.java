@@ -28,6 +28,8 @@ public class RootResource {
     public static final Response CONFLICT = Response.status(409).build();
     public static final Response SUCCESSFUL = Response.status(200).build();
     public static final Response NOT_FOUND = Response.status(404).build();
+    public static final Response BAD_DATA = Response.status(400).build();
+    public static final Response UPDATED = Response.status(204).build();
 
 
     private WeatherTrackerService trackerService = new WeatherTrackerService();
@@ -37,10 +39,9 @@ public class RootResource {
     @GET
     public Response get() {
 
-        // return Response
-        //     .ok("Weather tracker is up and running!\n")
-        //     .build();
-        return trackerService.testingService();
+        return Response
+                .ok("Weather tracker is up and running!\n")
+                .build();
     }
 
     // features/01-measurements/01-add-measurement.feature
@@ -55,71 +56,7 @@ public class RootResource {
             "precipitation": 0
         }
         */
-        trackerService.saveData(measurement);
-        return Response
-                .ok("All data saved")
-                .build();
-    }
-
-    @POST
-    @Path("/testString")
-    public Response testString(JsonNode values) {
-        /* Example:
-        measurement := {
-            "timestamp": "2015-09-01T16:00:00.000Z",
-            "temperature": 27.1,
-            "dewPoint": 16.7,
-            "precipitation": 0
-        }
-        */
-        trackerService.saveValuesTest(values);
-        return Response
-                .ok("Working on JsonNode")
-                .build();
-    }
-
-    @GET
-    @Path("/testString/{key}")
-    public Response getTestString(@PathParam("key") String key) {
-        /* Example:
-        measurement := {
-            "timestamp": "2015-09-01T16:00:00.000Z",
-            "temperature": 27.1,
-            "dewPoint": 16.7,
-            "precipitation": 0
-        }
-        */
-
-        String sampleString = trackerService.retrieveTestData(key);
-
-        if (sampleString != null && !sampleString.isEmpty()) {
-            return Response
-                    .ok(sampleString.toString())
-                    .build();
-        } else {
-            return Response
-                    .ok("there is nothing in the string yet")
-                    .build();
-        }
-    }
-
-    @GET
-    @Path("/testString")
-    public Response getAllElements() {
-        /* Example:
-        measurement := {
-            "timestamp": "2015-09-01T16:00:00.000Z",
-            "temperature": 27.1,
-            "dewPoint": 16.7,
-            "precipitation": 0
-        }
-        */
-
-        Map<String, Object> temp = trackerService.retrieveTestDataAll();
-        return Response
-                .ok("All data retrieved")
-                .entity(temp)
-                .build();
+        return trackerService.saveData(measurement);
     }
 
     // features/01-measurements/02-get-measurement.feature
@@ -156,25 +93,18 @@ public class RootResource {
             }
         ]
         */
-        List<Map<String, Object>> measurements = null;
-        try {
-            measurements = trackerService.retrieveDataTimeStampBased(timestamp);
-            if (measurements.size() == 1) {
-                return Response
-                        .ok("All data retrieved")
-                        .entity(measurements.get(0))
-                        .build();
-            }
+        List<Map<String, Object>> measurements = trackerService.retrieveDataTimeStampBased(timestamp);
+
+        if (measurements.size() == 0) {
+            return NOT_FOUND;
+        } else if (measurements.size() == 1) {
             return Response
                     .ok("All data retrieved")
-                    .entity(measurements)
+                    .entity(measurements.get(0))
                     .build();
-        } catch (ParseException e) {
-            e.printStackTrace();
         }
-
         return Response
-                .ok("Some sort of error")
+                .ok("All data retrieved")
                 .entity(measurements)
                 .build();
     }
@@ -194,10 +124,8 @@ public class RootResource {
         }
         */
 
-        trackerService.updateMeasurement(timestamp, measurement);
-        return Response
-                .ok("Working on updating the measurement")
-                .build();
+        return trackerService.updateMeasurement(timestamp, measurement);
+
     }
 
     // features/01-measurements/03-update-measurement.feature
@@ -224,10 +152,7 @@ public class RootResource {
         timestamp := "2015-09-01T16:20:00.000Z"
         */
 
-        trackerService.deleteMeasurement(timestamp);
-        return Response
-                .ok("Working on deleting a measurement")
-                .build();
+        return trackerService.deleteMeasurement(timestamp);
     }
 
 

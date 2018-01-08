@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.joda.time.DateTime;
 
 import javax.ws.rs.core.Response;
-import java.text.ParseException;
 import java.util.*;
 
 public class WeatherTrackerService {
@@ -13,14 +12,7 @@ public class WeatherTrackerService {
     private DataUtility database = DataUtility.getInstance();
     private Test testData = Test.getInstance();
 
-
-    public Response testingService() {
-        return Response
-                .ok("WeatherTracker! \n")
-                .build();
-    }
-
-    public void saveData(JsonNode measurement) {
+    public Response saveData(JsonNode measurement) {
 
         Iterator<Map.Entry<String, JsonNode>> iterator = measurement.fields();
         String key = null;
@@ -32,21 +24,26 @@ public class WeatherTrackerService {
             if (field.equalsIgnoreCase("timestamp")) {
                 key = entry.getValue().textValue();
             } else {
+                if (entry.getValue().textValue() != null) {
+                    return RootResource.BAD_DATA;
+                }
                 Float value = entry.getValue().floatValue();
                 tempMap.put(field, value);
             }
         }
         if (key != null) {
             database.put(key, tempMap);
+        } else {
+            return RootResource.BAD_DATA;
         }
+        return Response.status(201).header("Location", "/measurements/" + key).build();
     }
 
-    public List<Map<String, Object>> retrieveDataTimeStampBased(String timestamp) throws ParseException {
+    public List<Map<String, Object>> retrieveDataTimeStampBased(String timestamp) {
 
         Map<String, Map<String, Float>> allData = database.getData();
 
         List<Map<String, Object>> measurements = new ArrayList<>();
-
 
         for (Map.Entry<String, Map<String, Float>> entry : allData.entrySet()) {
             if (entry.getKey().startsWith(timestamp)) {
@@ -62,11 +59,23 @@ public class WeatherTrackerService {
             }
         }
 
+        Comparator<Map<String, Object>> mapComparator = new Comparator<Map<String, Object>>() {
+            public int compare(Map<String, Object> m1, Map<String, Object> m2) {
+                String m1Timestamp = m1.get("timestamp").toString();
+                String m2Timestamp = m2.get("timestamp").toString();
+
+                return m1Timestamp.compareTo(m2Timestamp);
+            }
+        };
+
+        Collections.sort(measurements, mapComparator);
+
         return measurements;
 
     }
 
-    public void updateMeasurement(String timestamp, JsonNode measurement) {
+
+    public Response updateMeasurement(String timestamp, JsonNode measurement) {
         Map<String, Map<String, Float>> allData = database.getData();
 
         //get the values of the map from the measurements
@@ -75,12 +84,25 @@ public class WeatherTrackerService {
         while (iterator.hasNext()) {
             Map.Entry<String, JsonNode> entry = iterator.next();
             String field = entry.getKey();
-            JsonNode value = entry.getValue();
             if (!field.equalsIgnoreCase("timestamp")) {
-                tempMap.put(field, Float.parseFloat(value.textValue()));
+                if (entry.getValue().textValue() != null) {
+                    return RootResource.BAD_DATA;
+                }
+                Float value = entry.getValue().floatValue();
+                tempMap.put(field, value);
+            } else {
+                if (!entry.getValue().textValue().equalsIgnoreCase(timestamp)) {
+                    return RootResource.CONFLICT;
+                }
             }
         }
+
+        if (!allData.keySet().contains(timestamp)) {
+            return RootResource.NOT_FOUND;
+        }
+
         allData.put(timestamp, tempMap);
+        return RootResource.UPDATED;
     }
 
     public Response patchMeasurement(String timestamp, JsonNode measurement) {
@@ -98,29 +120,35 @@ public class WeatherTrackerService {
         while (iterator.hasNext()) {
             Map.Entry<String, JsonNode> entry = iterator.next();
             String field = entry.getKey();
-            JsonNode value = entry.getValue();
             if (field.equalsIgnoreCase("timestamp")) {
                 key = entry.getValue().textValue();
                 if (!key.equalsIgnoreCase(timestamp)) {
                     return RootResource.CONFLICT;
                 }
             } else {
-                //check for the dataType of the values
-                if (existingMeasurement.get(field) != null) {
-                    existingMeasurement.put(field, Float.parseFloat(value.textValue()));
+                if (entry.getValue().textValue() != null) {
+                    return RootResource.BAD_DATA;
                 }
+                Float value = entry.getValue().floatValue();
+                existingMeasurement.put(field, value);
             }
         }
 
         allData.put(timestamp, existingMeasurement);
-        return RootResource.SUCCESSFUL;
+        return RootResource.UPDATED;
     }
 
-    public void deleteMeasurement(String timestamp) {
+    public Response deleteMeasurement(String timestamp) {
+        Map<String, Map<String, Float>> allData = database.getData();
+        Map<String, Float> existingMeasurement = allData.get(timestamp);
+        if (existingMeasurement == null) {
+            return RootResource.NOT_FOUND;
+        }
         database.delete(timestamp);
+        return RootResource.UPDATED;
     }
 
-    public List<Map<String, Object>> getStat(List<String> metric, List<String> stats, String fromDateTime, String toDateTime) {
+    public List<Map<String, Object>> getStat(List<String> metrics, List<String> stats, String fromDateTime, String toDateTime) {
 
         List<Map<String, Object>> statsList = new ArrayList<>();
 
@@ -128,65 +156,69 @@ public class WeatherTrackerService {
 
         Map<String, Float> variableStats = new HashMap<>();
 
-        for (String met : metric) {
+        for (String metric : metrics) {
             if (stats.contains("min")) {
-                variableStats.put(met + "min", 1000.0f);
+                variableStats.put(metric + "min", 1000.0f);
+                variableStats.put(metric + "min" + "include", 0.0f);
             }
             if (stats.contains("max")) {
-                variableStats.put(met + "max", 0.0f);
+                variableStats.put(metric + "max", 0.0f);
+                variableStats.put(metric + "max" + "include", 0.0f);
             }
             if (stats.contains("average")) {
-                variableStats.put(met + "average" + "sum", 0.0f);
-                variableStats.put(met + "average" + "count", 0.0f);
+                variableStats.put(metric + "average" + "sum", 0.0f);
+                variableStats.put(metric + "average" + "count", 0.0f);
+                variableStats.put(metric + "average" + "include", 0.0f);
             }
         }
 
-        //looping through the data
         for (Map.Entry<String, Map<String, Float>> entry : allData.entrySet()) {
 
             DateTime measurementDate = new DateTime(entry.getKey());
 
             if (fromDateTime == null && toDateTime == null) {
-                calculateStat(entry, metric, stats, variableStats);
+                calculateStat(entry, metrics, stats, variableStats);
             } else if (fromDateTime != null && toDateTime != null) {
-                DateTime fromDate = new DateTime(fromDateTime);     // TODO: 1/7/18 followup on this
+                DateTime fromDate = new DateTime(fromDateTime);
                 DateTime toDate = new DateTime(toDateTime);
-                if ((measurementDate.isEqual(fromDate) || measurementDate.isAfter(fromDate)) && (measurementDate.isEqual(toDate) || measurementDate.isBefore(toDate))) {
-                    calculateStat(entry, metric, stats, variableStats);
+                if ((measurementDate.isEqual(fromDate) || measurementDate.isAfter(fromDate)) && measurementDate.isBefore(toDate)) {
+                    calculateStat(entry, metrics, stats, variableStats);
                 }
             } else if (fromDateTime != null) {
                 DateTime fromDate = new DateTime(fromDateTime);
                 if (measurementDate.isEqual(fromDate) || measurementDate.isAfter(fromDate)) {
-                    calculateStat(entry, metric, stats, variableStats);
+                    calculateStat(entry, metrics, stats, variableStats);
                 }
-            } else if (toDateTime != null) {
+            } else {
                 DateTime toDate = new DateTime(toDateTime);
-                if (measurementDate.isEqual(toDate) || measurementDate.isBefore(toDate)) {
-                    calculateStat(entry, metric, stats, variableStats);
+                if (measurementDate.isBefore(toDate)) {
+                    calculateStat(entry, metrics, stats, variableStats);
                 }
             }
         }
 
-        for (String met : metric) {
-            if (stats.contains("min")) {
+        for (String metric : metrics) {
+            if (stats.contains("min") && (variableStats.get(metric + "min" + "include") != 0f)) {
                 Map<String, Object> minMap = new HashMap<>();
-                minMap.put("metric", met);
+                minMap.put("metric", metric);
                 minMap.put("stat", "min");
-                minMap.put("value", variableStats.get(met + "min"));
+                minMap.put("value", variableStats.get(metric + "min"));
                 statsList.add(minMap);
             }
-            if (stats.contains("max")) {
+            if (stats.contains("max") && (variableStats.get(metric + "max" + "include") != 0f)) {
                 Map<String, Object> maxMap = new HashMap<>();
-                maxMap.put("metric", met);
+                maxMap.put("metric", metric);
                 maxMap.put("stat", "max");
-                maxMap.put("value", variableStats.get(met + "max"));
+                maxMap.put("value", variableStats.get(metric + "max"));
                 statsList.add(maxMap);
             }
-            if (stats.contains("average")) {
+            if (stats.contains("average") && (variableStats.get(metric + "average" + "include") != 0f)) {
+                Float average = variableStats.get(metric + "average" + "sum") / variableStats.get(metric + "average" + "count");
+                average = Math.round(average * 10.0f) / 10.0f;
                 Map<String, Object> averageMap = new HashMap<>();
-                averageMap.put("metric", met);
+                averageMap.put("metric", metric);
                 averageMap.put("stat", "average");
-                averageMap.put("value", variableStats.get(met + "average" + "sum") / variableStats.get(met + "average" + "count"));
+                averageMap.put("value", average);
                 statsList.add(averageMap);
             }
         }
@@ -194,7 +226,7 @@ public class WeatherTrackerService {
         return statsList;
     }
 
-    public void calculateStat(Map.Entry<String, Map<String, Float>> entry, List<String> metric, List<String> stats, Map<String, Float> variableStats) {
+    private void calculateStat(Map.Entry<String, Map<String, Float>> entry, List<String> metric, List<String> stats, Map<String, Float> variableStats) {
         Map<String, Float> measurementValues = entry.getValue();
         //run through the keySet and see if it contains a particular metric
         for (Map.Entry<String, Float> entry1 : measurementValues.entrySet()) {
@@ -202,45 +234,23 @@ public class WeatherTrackerService {
                 if (stats.contains("min")) {
                     if (entry1.getValue() < variableStats.get(entry1.getKey() + "min")) {
                         variableStats.put(entry1.getKey() + "min", entry1.getValue());
+                        variableStats.put(entry1.getKey() + "min" + "include", 1f);
                     }
                 }
                 if (stats.contains("max")) {
                     if (entry1.getValue() > variableStats.get(entry1.getKey() + "max")) {
                         variableStats.put(entry1.getKey() + "max", entry1.getValue());
+                        variableStats.put(entry1.getKey() + "max" + "include", 1f);
                     }
                 }
                 if (stats.contains("average")) {
                     Float newSum = entry1.getValue() + variableStats.get(entry1.getKey() + "average" + "sum");
                     variableStats.put(entry1.getKey() + "average" + "sum", newSum);
                     variableStats.put(entry1.getKey() + "average" + "count", variableStats.get(entry1.getKey() + "average" + "count") + 1);
+                    variableStats.put(entry1.getKey() + "average" + "include", 1f);
+
                 }
             }
         }
-    }
-
-    public void saveValuesTest(JsonNode values) {
-        Iterator<Map.Entry<String, JsonNode>> iterator = values.fields();
-
-        while (iterator.hasNext()) {
-            Map.Entry<String, JsonNode> entry = iterator.next();
-            String key = entry.getKey();
-            JsonNode value = entry.getValue();
-            testData.put(key, value);
-        }
-
-    }
-
-
-    public String retrieveTestData(String key) {
-        Map<String, Object> sampleData = testData.getData();
-        Object temp = sampleData.get(key);
-        if (temp != null) {
-            return temp.toString();
-        }
-        return "Did not find the data";
-    }
-
-    public Map<String, Object> retrieveTestDataAll() {
-        return testData.getData();
     }
 }

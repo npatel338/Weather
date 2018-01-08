@@ -12,7 +12,7 @@ import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.servlet.ServletContainer;
 
 public class AppServer {
-    public static final int PORT = 8000; // Required port for HackerRank
+    public static final int PORT = 8082; // Required port for HackerRank
 
     public static void main(String[] args) {
         ResourceConfig config = new ResourceConfig()
