@@ -1,6 +1,5 @@
 package com.capitalone.weathertracker.services;
 
-import com.capitalone.weathertracker.resources.RootResource;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.joda.time.DateTime;
 
@@ -10,8 +9,11 @@ import java.util.*;
 public class WeatherTrackerService {
 
     private DataUtility database = DataUtility.getInstance();
-    private Test testData = Test.getInstance();
 
+    public static final Response CONFLICT = Response.status(409).build();
+    public static final Response NOT_FOUND = Response.status(404).build();
+    public static final Response BAD_DATA = Response.status(400).build();
+    public static final Response UPDATED = Response.status(204).build();
     public Response saveData(JsonNode measurement) {
 
         Iterator<Map.Entry<String, JsonNode>> iterator = measurement.fields();
@@ -25,7 +27,7 @@ public class WeatherTrackerService {
                 key = entry.getValue().textValue();
             } else {
                 if (entry.getValue().textValue() != null) {
-                    return RootResource.BAD_DATA;
+                    return BAD_DATA;
                 }
                 Float value = entry.getValue().floatValue();
                 tempMap.put(field, value);
@@ -34,7 +36,7 @@ public class WeatherTrackerService {
         if (key != null) {
             database.put(key, tempMap);
         } else {
-            return RootResource.BAD_DATA;
+            return BAD_DATA;
         }
         return Response.status(201).header("Location", "/measurements/" + key).build();
     }
@@ -86,23 +88,23 @@ public class WeatherTrackerService {
             String field = entry.getKey();
             if (!field.equalsIgnoreCase("timestamp")) {
                 if (entry.getValue().textValue() != null) {
-                    return RootResource.BAD_DATA;
+                    return BAD_DATA;
                 }
                 Float value = entry.getValue().floatValue();
                 tempMap.put(field, value);
             } else {
                 if (!entry.getValue().textValue().equalsIgnoreCase(timestamp)) {
-                    return RootResource.CONFLICT;
+                    return CONFLICT;
                 }
             }
         }
 
         if (!allData.keySet().contains(timestamp)) {
-            return RootResource.NOT_FOUND;
+            return NOT_FOUND;
         }
 
         allData.put(timestamp, tempMap);
-        return RootResource.UPDATED;
+        return UPDATED;
     }
 
     public Response patchMeasurement(String timestamp, JsonNode measurement) {
@@ -111,7 +113,7 @@ public class WeatherTrackerService {
         Map<String, Float> existingMeasurement = allData.get(timestamp);
 
         if (existingMeasurement == null) {
-            return RootResource.NOT_FOUND;
+            return NOT_FOUND;
         }
 
         Iterator<Map.Entry<String, JsonNode>> iterator = measurement.fields();
@@ -123,11 +125,11 @@ public class WeatherTrackerService {
             if (field.equalsIgnoreCase("timestamp")) {
                 key = entry.getValue().textValue();
                 if (!key.equalsIgnoreCase(timestamp)) {
-                    return RootResource.CONFLICT;
+                    return CONFLICT;
                 }
             } else {
                 if (entry.getValue().textValue() != null) {
-                    return RootResource.BAD_DATA;
+                    return BAD_DATA;
                 }
                 Float value = entry.getValue().floatValue();
                 existingMeasurement.put(field, value);
@@ -135,17 +137,17 @@ public class WeatherTrackerService {
         }
 
         allData.put(timestamp, existingMeasurement);
-        return RootResource.UPDATED;
+        return UPDATED;
     }
 
     public Response deleteMeasurement(String timestamp) {
         Map<String, Map<String, Float>> allData = database.getData();
         Map<String, Float> existingMeasurement = allData.get(timestamp);
         if (existingMeasurement == null) {
-            return RootResource.NOT_FOUND;
+            return NOT_FOUND;
         }
         database.delete(timestamp);
-        return RootResource.UPDATED;
+        return UPDATED;
     }
 
     public List<Map<String, Object>> getStat(List<String> metrics, List<String> stats, String fromDateTime, String toDateTime) {

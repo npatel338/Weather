@@ -12,6 +12,8 @@ import javax.ws.rs.core.Response;
 
 import com.capitalone.weathertracker.services.WeatherTrackerService;
 
+import static com.capitalone.weathertracker.services.WeatherTrackerService.NOT_FOUND;
+
 /*
   TODO: Implement the endpoints in the ATs.
   The below stubs are provided as a starting point.
@@ -24,12 +26,7 @@ import com.capitalone.weathertracker.services.WeatherTrackerService;
 public class RootResource {
 
     public static final Response NOT_IMPLEMENTED = Response.status(501).build();
-    public static final Response CREATED = Response.status(201).build();
-    public static final Response CONFLICT = Response.status(409).build();
-    public static final Response SUCCESSFUL = Response.status(200).build();
-    public static final Response NOT_FOUND = Response.status(404).build();
-    public static final Response BAD_DATA = Response.status(400).build();
-    public static final Response UPDATED = Response.status(204).build();
+
 
 
     private WeatherTrackerService trackerService = new WeatherTrackerService();
